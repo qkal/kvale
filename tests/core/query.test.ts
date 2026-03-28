@@ -1,0 +1,367 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { QueryRunner } from '../../src/core/query';
+import { CacheStore } from '../../src/core/cache';
+import type { CacheConfig, QueryConfig } from '../../src/core/types';
+
+const BASE_CONFIG: CacheConfig = {
+  staleTime: 30_000,
+  retry: 1,
+  refetchOnWindowFocus: false,
+  persist: undefined,
+};
+
+function makeRunner<T>(
+  queryConfig: Omit<QueryConfig<T>, 'key'> & Partial<Pick<QueryConfig<T>, 'key'>>,
+  cacheConfig: Partial<CacheConfig> = {},
+  store?: CacheStore,
+): QueryRunner<T> {
+  return new QueryRunner(
+    store ?? new CacheStore({}),
+    { key: 'test', ...queryConfig } as QueryConfig<T>,
+    { ...BASE_CONFIG, ...cacheConfig },
+  );
+}
+
+describe('QueryRunner', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  describe('initial state', () => {
+    it('starts as idle', () => {
+      const runner = makeRunner({ fn: vi.fn() });
+      expect(runner.getState().status).toBe('idle');
+    });
+
+    it('pre-populates data from fresh cache', () => {
+      const store = new CacheStore({});
+      store.set('["test"]', { data: [1, 2], timestamp: Date.now(), error: null });
+      const runner = makeRunner({ fn: vi.fn() }, {}, store);
+      // Still idle before execute() — data is just pre-loaded into state
+      expect(runner.getState().data).toEqual([1, 2]);
+    });
+  });
+
+  describe('isEnabled', () => {
+    it('returns true when enabled is undefined', () => {
+      const runner = makeRunner({ fn: vi.fn() });
+      expect(runner.isEnabled()).toBe(true);
+    });
+
+    it('returns true when enabled is true', () => {
+      const runner = makeRunner({ fn: vi.fn(), enabled: true });
+      expect(runner.isEnabled()).toBe(true);
+    });
+
+    it('returns false when enabled is false', () => {
+      const runner = makeRunner({ fn: vi.fn(), enabled: false });
+      expect(runner.isEnabled()).toBe(false);
+    });
+
+    it('calls getter function', () => {
+      const runner = makeRunner({ fn: vi.fn(), enabled: () => false });
+      expect(runner.isEnabled()).toBe(false);
+    });
+
+    it('returns false when getter throws', () => {
+      const runner = makeRunner({ fn: vi.fn(), enabled: () => { throw new Error('boom'); } });
+      expect(runner.isEnabled()).toBe(false);
+    });
+  });
+
+  describe('execute — cache miss (loading)', () => {
+    it('sets status to loading then success', async () => {
+      const fn = vi.fn().mockResolvedValue([1, 2, 3]);
+      const runner = makeRunner({ fn });
+
+      runner.execute();
+      expect(runner.getState().status).toBe('loading');
+
+      await vi.runAllTimersAsync();
+      expect(runner.getState().status).toBe('success');
+      expect(runner.getState().data).toEqual([1, 2, 3]);
+    });
+
+    it('calls fn exactly once', async () => {
+      const fn = vi.fn().mockResolvedValue('data');
+      const runner = makeRunner({ fn });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledOnce();
+    });
+
+    it('notifies subscriber on status change', async () => {
+      const fn = vi.fn().mockResolvedValue('data');
+      const runner = makeRunner({ fn });
+      const statuses: string[] = [];
+      runner.subscribe((s) => statuses.push(s.status));
+
+      runner.execute();
+      await vi.runAllTimersAsync();
+
+      expect(statuses).toContain('loading');
+      expect(statuses).toContain('success');
+    });
+  });
+
+  describe('execute — fresh cache hit', () => {
+    it('returns success immediately without fetching', async () => {
+      const store = new CacheStore({});
+      store.set('["test"]', { data: [1], timestamp: Date.now(), error: null });
+
+      const fn = vi.fn();
+      const runner = makeRunner({ fn }, {}, store);
+      runner.execute();
+
+      expect(runner.getState().status).toBe('success');
+      expect(runner.getState().data).toEqual([1]);
+      expect(fn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('execute — stale cache (refreshing)', () => {
+    it('returns stale data immediately + triggers background refetch', async () => {
+      const store = new CacheStore({});
+      store.set('["test"]', { data: ['stale'], timestamp: Date.now(), error: null });
+      vi.advanceTimersByTime(30_001);
+
+      const fn = vi.fn().mockResolvedValue(['fresh']);
+      const runner = makeRunner({ fn }, {}, store);
+      runner.execute();
+
+      expect(runner.getState().status).toBe('refreshing');
+      expect(runner.getState().data).toEqual(['stale']);
+
+      await vi.runAllTimersAsync();
+      expect(runner.getState().status).toBe('success');
+      expect(runner.getState().data).toEqual(['fresh']);
+    });
+
+    it('sets isStale to true during refreshing', async () => {
+      const store = new CacheStore({});
+      store.set('["test"]', { data: 'old', timestamp: Date.now(), error: null });
+      vi.advanceTimersByTime(30_001);
+
+      const fn = vi.fn().mockResolvedValue('new');
+      const runner = makeRunner({ fn }, {}, store);
+      runner.execute();
+
+      expect(runner.getState().isStale).toBe(true);
+    });
+  });
+
+  describe('retry', () => {
+    it('retries once on failure and succeeds on second attempt', async () => {
+      const fn = vi.fn()
+        .mockRejectedValueOnce(new Error('network error'))
+        .mockResolvedValue(['data']);
+      const runner = makeRunner({ fn }, { retry: 1 });
+      runner.execute();
+
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledTimes(2);
+      expect(runner.getState().status).toBe('success');
+    });
+
+    it('sets error state after all retries exhausted', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('always fails'));
+      const runner = makeRunner({ fn }, { retry: 1 });
+      runner.execute();
+
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledTimes(2); // 1 initial + 1 retry
+      expect(runner.getState().status).toBe('error');
+      expect(runner.getState().error?.message).toBe('always fails');
+    });
+
+    it('sets error with retry: 0 after single failure', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const runner = makeRunner({ fn }, { retry: 0 });
+      runner.execute();
+
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(runner.getState().status).toBe('error');
+    });
+
+    it('preserves stale data after background refetch failure', async () => {
+      const store = new CacheStore({});
+      store.set('["test"]', { data: ['stale'], timestamp: Date.now(), error: null });
+      vi.advanceTimersByTime(30_001);
+
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      const runner = makeRunner({ fn }, { retry: 0 }, store);
+      runner.execute();
+
+      await vi.runAllTimersAsync();
+      expect(runner.getState().status).toBe('error');
+      expect(runner.getState().data).toEqual(['stale']); // not wiped
+    });
+  });
+
+  describe('enabled', () => {
+    it('does not execute when enabled is false', async () => {
+      const fn = vi.fn();
+      const runner = makeRunner({ fn, enabled: false });
+      runner.execute();
+
+      await vi.runAllTimersAsync();
+      expect(fn).not.toHaveBeenCalled();
+      expect(runner.getState().status).toBe('idle');
+    });
+
+    it('does not execute when enabled getter returns false', async () => {
+      const fn = vi.fn();
+      const runner = makeRunner({ fn, enabled: () => false });
+      runner.execute();
+
+      await vi.runAllTimersAsync();
+      expect(fn).not.toHaveBeenCalled();
+    });
+
+    it('executes normally when enabled is true', async () => {
+      const fn = vi.fn().mockResolvedValue('data');
+      const runner = makeRunner({ fn, enabled: true });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(runner.getState().status).toBe('success');
+    });
+  });
+
+  describe('refetch', () => {
+    it('triggers a new fetch regardless of staleness', async () => {
+      const fn = vi.fn()
+        .mockResolvedValueOnce('first')
+        .mockResolvedValueOnce('second');
+      const runner = makeRunner({ fn });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(runner.getState().data).toBe('first');
+
+      void runner.refetch();
+      await vi.runAllTimersAsync();
+      expect(runner.getState().data).toBe('second');
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
+    it('sets status to refreshing when data exists', async () => {
+      const fn = vi.fn()
+        .mockResolvedValueOnce('first')
+        .mockResolvedValue('second');
+      const runner = makeRunner({ fn });
+      runner.execute();
+      await vi.runAllTimersAsync();
+
+      const statuses: string[] = [];
+      runner.subscribe((s) => statuses.push(s.status));
+      void runner.refetch();
+      expect(statuses[0]).toBe('refreshing');
+    });
+  });
+
+  describe('polling', () => {
+    it('calls fn again after refetchInterval', async () => {
+      const fn = vi.fn().mockResolvedValue('data');
+      const runner = makeRunner({ fn, refetchInterval: 5_000 });
+      runner.execute();
+      await vi.advanceTimersByTimeAsync(0); // flush initial fetch without advancing past t=0
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(5_000); // advance to t=5000, fires interval once
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
+    it('stops polling after destroy', async () => {
+      const fn = vi.fn().mockResolvedValue('data');
+      const runner = makeRunner({ fn, refetchInterval: 5_000 });
+      runner.execute();
+      await vi.advanceTimersByTimeAsync(0); // flush initial fetch
+
+      runner.destroy();
+      await vi.advanceTimersByTimeAsync(10_000); // interval cleared — no extra calls
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('window focus', () => {
+    it('refetches stale data on visibilitychange', async () => {
+      const store = new CacheStore({});
+      store.set('["test"]', { data: 'old', timestamp: Date.now(), error: null });
+      vi.advanceTimersByTime(30_001); // make stale
+
+      const fn = vi.fn().mockResolvedValue('new');
+      const runner = makeRunner({ fn }, { refetchOnWindowFocus: true }, store);
+      runner.execute(); // stale cache hit → refreshing
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      // Data is now fresh. Make stale again.
+      vi.advanceTimersByTime(30_001);
+
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.runAllTimersAsync();
+
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not refetch when data is fresh on focus', async () => {
+      const fn = vi.fn().mockResolvedValue('data');
+      const runner = makeRunner({ fn }, { refetchOnWindowFocus: true });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      // Data is fresh — no time advance
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.runAllTimersAsync();
+
+      expect(fn).toHaveBeenCalledTimes(1); // no extra call
+    });
+
+    it('removes visibilitychange listener on destroy', async () => {
+      const fn = vi.fn().mockResolvedValue('data');
+      const runner = makeRunner({ fn }, { refetchOnWindowFocus: true });
+      runner.execute();
+      await vi.runAllTimersAsync();
+
+      runner.destroy();
+      vi.advanceTimersByTime(30_001);
+
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.runAllTimersAsync();
+
+      expect(fn).toHaveBeenCalledTimes(1); // no call after destroy
+    });
+  });
+
+  describe('destroy', () => {
+    it('does nothing after destroy is called twice', () => {
+      const runner = makeRunner({ fn: vi.fn() });
+      runner.destroy();
+      expect(() => runner.destroy()).not.toThrow();
+    });
+
+    it('ignores execute() after destroy', async () => {
+      const fn = vi.fn();
+      const runner = makeRunner({ fn });
+      runner.destroy();
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(fn).not.toHaveBeenCalled();
+    });
+  });
+});

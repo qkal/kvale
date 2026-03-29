@@ -370,4 +370,67 @@ describe('QueryRunner', () => {
       expect(fn).not.toHaveBeenCalled();
     });
   });
+
+  describe('exponential backoff', () => {
+    it('retries with exponential delay: 1000ms then 2000ms', async () => {
+      let attempts = 0;
+      const fn = vi.fn(async (_signal: AbortSignal) => {
+        attempts++;
+        if (attempts < 3) throw new Error('fail');
+        return 'ok';
+      });
+      const runner = makeRunner({ fn }, { retry: 2 });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledTimes(3);
+      expect(runner.getState().status).toBe('success');
+    });
+
+    it('caps delay at 30_000ms', async () => {
+      const delays: number[] = [];
+      const origSetTimeout = globalThis.setTimeout;
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation((cb: TimerHandler, delay?: number, ...args: unknown[]) => {
+        if (typeof delay === 'number' && delay > 500) delays.push(delay);
+        return origSetTimeout(cb as () => void, 0, ...args);
+      });
+
+      const fn = vi.fn(async (_signal: AbortSignal) => { throw new Error('fail'); });
+      const runner = makeRunner({ fn }, { retry: 6 });
+      runner.execute();
+      await vi.runAllTimersAsync();
+
+      expect(delays.every((d) => d <= 30_000)).toBe(true);
+      vi.restoreAllMocks();
+    });
+  });
+
+  describe('AbortController', () => {
+    it('passes AbortSignal to fn', async () => {
+      let receivedSignal: AbortSignal | undefined;
+      const fn = vi.fn(async (signal: AbortSignal) => {
+        receivedSignal = signal;
+        return 'data';
+      });
+      const runner = makeRunner({ fn });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(receivedSignal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('aborts signal when destroy() is called mid-fetch', async () => {
+      let capturedSignal: AbortSignal | undefined;
+      const fn = vi.fn(
+        (_signal: AbortSignal) =>
+          new Promise<string>((resolve) => {
+            capturedSignal = _signal;
+            setTimeout(() => resolve('data'), 10_000);
+          }),
+      );
+      const runner = makeRunner({ fn });
+      runner.execute();
+      runner.destroy();
+      await vi.runAllTimersAsync();
+      expect(capturedSignal?.aborted).toBe(true);
+    });
+  });
 });

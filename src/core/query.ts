@@ -11,7 +11,7 @@ import type { CacheConfig, QueryConfig, QueryState, QuerySubscriber } from './ty
  * runner.execute(); // starts the query
  * runner.destroy(); // cleans up intervals and listeners
  */
-export class QueryRunner<T> {
+export class QueryRunner<T, U = T> {
   private readonly serializedKey: string;
   private readonly staleTime: number;
   private state: QueryState<T>;
@@ -20,13 +20,17 @@ export class QueryRunner<T> {
   private visibilityHandler: (() => void) | undefined;
   private sideEffectsSetUp = false;
   private destroyed = false;
+  private abortController: AbortController | undefined;
 
   constructor(
     private readonly store: CacheStore,
-    private readonly config: QueryConfig<T>,
+    private readonly config: QueryConfig<T, U>,
     private readonly cacheConfig: CacheConfig,
+    /** Previous data to show while loading (used by adapter for keepPreviousData). */
+    private readonly previousData?: T,
   ) {
-    const normalized = normalizeKey(config.key);
+    const key = typeof config.key === 'function' ? config.key() : config.key;
+    const normalized = normalizeKey(key);
     this.serializedKey = serializeKey(normalized);
     this.staleTime = config.staleTime ?? cacheConfig.staleTime;
 
@@ -56,6 +60,11 @@ export class QueryRunner<T> {
     }
   }
 
+  /** Returns the serialized key for this runner. */
+  getSerializedKey(): string {
+    return this.serializedKey;
+  }
+
   /** Returns a copy of the current query state. */
   getState(): QueryState<T> {
     return { ...this.state };
@@ -72,10 +81,13 @@ export class QueryRunner<T> {
   /**
    * Starts the query. Checks the cache, sets initial status, and triggers
    * a fetch if needed. Also sets up polling and window focus listeners.
+   * Registers with the store for gcTime tracking.
    * No-op if disabled or already destroyed.
    */
   execute(): void {
     if (this.destroyed || !this.isEnabled()) return;
+
+    this.store.registerKey(this.serializedKey);
 
     const cached = this.store.get(this.serializedKey);
     const isStale = this.store.isStale(this.serializedKey, this.staleTime);
@@ -93,8 +105,12 @@ export class QueryRunner<T> {
       return;
     }
 
-    // No cache — first fetch
-    this.setState({ status: 'loading', data: undefined, error: null, isStale: false });
+    // No cache hit — use previousData if keepPreviousData is set
+    if (this.config.keepPreviousData && this.previousData !== undefined) {
+      this.setState({ status: 'refreshing', data: this.previousData, error: null, isStale: false });
+    } else {
+      this.setState({ status: 'loading', data: undefined, error: null, isStale: false });
+    }
     void this.fetchWithRetry();
     this.setupSideEffects();
   }
@@ -113,11 +129,14 @@ export class QueryRunner<T> {
   }
 
   /**
-   * Clears intervals and removes event listeners. Called automatically by the
-   * Svelte adapter on component unmount via `$effect` cleanup.
+   * Clears intervals, removes event listeners, aborts in-flight request,
+   * and unregisters from the store for gcTime tracking.
+   * Called automatically by the Svelte adapter on component unmount.
    */
   destroy(): void {
     this.destroyed = true;
+    this.abortController?.abort();
+    this.abortController = undefined;
     if (this.intervalId !== undefined) {
       clearInterval(this.intervalId);
       this.intervalId = undefined;
@@ -129,6 +148,7 @@ export class QueryRunner<T> {
       this.visibilityHandler = undefined;
     }
     this.subscribers.clear();
+    this.store.unregisterKey(this.serializedKey);
   }
 
   /**
@@ -142,16 +162,42 @@ export class QueryRunner<T> {
   }
 
   private async fetchWithRetry(attempt = 0): Promise<void> {
+    this.abortController?.abort(); // abort any previous in-flight
+    this.abortController = new AbortController();
+    const { signal } = this.abortController;
+
+    // Deduplication: attach to existing in-flight promise if present
+    const existing = this.store.getInFlight(this.serializedKey);
+    if (existing) {
+      try {
+        const data = await (existing as Promise<T>);
+        if (this.destroyed || signal.aborted) return;
+        this.setState({ status: 'success', data, error: null, isStale: false });
+      } catch (err) {
+        if (this.destroyed || signal.aborted) return;
+        const error = err instanceof Error ? err : new Error(String(err));
+        this.setState({ ...this.state, status: 'error', error });
+      }
+      return;
+    }
+
+    // Start a new fetch
+    const promise = this.config.fn(signal);
+    this.store.setInFlight(this.serializedKey, promise, this.abortController);
+
     try {
-      const data = await this.config.fn();
-      if (this.destroyed) return;
+      const data = await promise;
+      this.store.clearInFlight(this.serializedKey);
+      if (this.destroyed || signal.aborted) return;
       this.store.set(this.serializedKey, { data, timestamp: Date.now(), error: null });
       this.setState({ status: 'success', data, error: null, isStale: false });
     } catch (err) {
-      if (this.destroyed) return;
+      this.store.clearInFlight(this.serializedKey);
+      if (this.destroyed || signal.aborted) return;
       if (attempt < this.cacheConfig.retry) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
-        if (this.destroyed) return;
+        const delay = Math.min(1000 * Math.pow(2, attempt), 30_000);
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        if (this.destroyed || signal.aborted) return;
         return this.fetchWithRetry(attempt + 1);
       }
       const error = err instanceof Error ? err : new Error(String(err));

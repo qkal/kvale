@@ -1,11 +1,11 @@
-# Kvale
+# Svale
 
 **Smart data layer for SvelteKit — fetch, cache, done.**
 
-[![npm](https://img.shields.io/npm/v/kvale)](https://npmjs.com/package/kvale)
-[![license](https://img.shields.io/npm/l/kvale)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/svale)](https://npmjs.com/package/svale)
+[![license](https://img.shields.io/npm/l/svale)](./LICENSE)
 
-## Why Kvale?
+## Why Svale?
 
 - **Svelte 5 runes native** — `$state`, `$effect`. No `writable()`, no wrappers.
 - **No `QueryClientProvider`** — just `createCache()` and `cache.query()`.
@@ -15,12 +15,12 @@
 ## Quick Start
 
 ```bash
-bun add kvale
+bun add svale
 ```
 
 ```ts
 // $lib/cache.ts
-import { createCache } from 'kvale';
+import { createCache } from 'svale';
 export const cache = createCache({ staleTime: 30_000 });
 ```
 

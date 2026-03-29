@@ -36,19 +36,19 @@ describe('CacheStore', () => {
 
   describe('get / set', () => {
     it('returns undefined for unknown key', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       expect(store.get('["todos"]')).toBeUndefined();
     });
 
     it('returns entry after set', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       const entry = makeEntry([1, 2, 3]);
       store.set('["todos"]', entry);
       expect(store.get('["todos"]')).toEqual(entry);
     });
 
     it('overwrites existing entry on set', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       store.set('["todos"]', makeEntry('first'));
       store.set('["todos"]', makeEntry('second'));
       expect(store.get('["todos"]')?.data).toBe('second');
@@ -57,34 +57,34 @@ describe('CacheStore', () => {
 
   describe('isStale', () => {
     it('returns false immediately after set', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       store.set('["todos"]', makeEntry([]));
       expect(store.isStale('["todos"]', 30_000)).toBe(false);
     });
 
     it('returns false just before staleTime elapses', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       store.set('["todos"]', makeEntry([]));
       vi.advanceTimersByTime(29_999);
       expect(store.isStale('["todos"]', 30_000)).toBe(false);
     });
 
     it('returns true after staleTime elapses', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       store.set('["todos"]', makeEntry([]));
       vi.advanceTimersByTime(30_001);
       expect(store.isStale('["todos"]', 30_000)).toBe(true);
     });
 
     it('returns true for unknown key', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       expect(store.isStale('["missing"]', 30_000)).toBe(true);
     });
   });
 
   describe('subscribe / notify', () => {
     it('calls subscriber when key is set', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       const cb = vi.fn();
       store.subscribe('["todos"]', cb);
       store.set('["todos"]', makeEntry([]));
@@ -92,7 +92,7 @@ describe('CacheStore', () => {
     });
 
     it('calls multiple subscribers for the same key', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       const cb1 = vi.fn();
       const cb2 = vi.fn();
       store.subscribe('["todos"]', cb1);
@@ -103,7 +103,7 @@ describe('CacheStore', () => {
     });
 
     it('does not call subscriber after unsubscribe', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       const cb = vi.fn();
       const unsubscribe = store.subscribe('["todos"]', cb);
       unsubscribe();
@@ -112,7 +112,7 @@ describe('CacheStore', () => {
     });
 
     it('calls subscriber when key is deleted', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       const cb = vi.fn();
       store.set('["todos"]', makeEntry([]));
       store.subscribe('["todos"]', cb);
@@ -121,7 +121,7 @@ describe('CacheStore', () => {
     });
 
     it('calls all subscribers on clear', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       const cb1 = vi.fn();
       const cb2 = vi.fn();
       store.set('["todos"]', makeEntry([]));
@@ -134,7 +134,7 @@ describe('CacheStore', () => {
     });
 
     it('does not call subscriber for a different key', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       const cb = vi.fn();
       store.subscribe('["todos"]', cb);
       store.set('["posts"]', makeEntry([]));
@@ -144,19 +144,19 @@ describe('CacheStore', () => {
 
   describe('delete / clear', () => {
     it('removes entry on delete', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       store.set('["todos"]', makeEntry([]));
       store.delete('["todos"]');
       expect(store.get('["todos"]')).toBeUndefined();
     });
 
     it('is a no-op delete for unknown key', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       expect(() => store.delete('["missing"]')).not.toThrow();
     });
 
     it('removes all entries on clear', () => {
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       store.set('["todos"]', makeEntry([]));
       store.set('["posts"]', makeEntry([]));
       store.clear();
@@ -168,7 +168,7 @@ describe('CacheStore', () => {
   describe('persistence', () => {
     it('persists entry to storage on set', () => {
       const storage = makeMockStorage();
-      const store = new CacheStore({ persist: storage });
+      const store = new CacheStore({ persist: storage, gcTime: 300_000 });
       store.set('["todos"]', makeEntry([1]));
       expect(storage.getItem('kvale-cache')).not.toBeNull();
     });
@@ -176,17 +176,54 @@ describe('CacheStore', () => {
     it('hydrates entries from storage on construction', () => {
       const storage = makeMockStorage();
       const entry = makeEntry([1, 2]);
-      const first = new CacheStore({ persist: storage });
+      const first = new CacheStore({ persist: storage, gcTime: 300_000 });
       first.set('["todos"]', entry);
 
-      const second = new CacheStore({ persist: storage });
+      const second = new CacheStore({ persist: storage, gcTime: 300_000 });
       expect(second.get('["todos"]')).toEqual(entry);
     });
 
     it('does not persist when no storage configured', () => {
       // Should not throw — just skips persistence
-      const store = new CacheStore({});
+      const store = new CacheStore({ gcTime: 300_000 });
       expect(() => store.set('["todos"]', makeEntry([]))).not.toThrow();
+    });
+  });
+
+  describe('in-flight deduplication', () => {
+    it('getInFlight returns undefined when no request is in flight', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      expect(store.getInFlight('["todos"]')).toBeUndefined();
+    });
+
+    it('getInFlight returns the promise after setInFlight', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      const p = Promise.resolve();
+      store.setInFlight('["todos"]', p, new AbortController());
+      expect(store.getInFlight('["todos"]')).toBe(p);
+    });
+
+    it('clearInFlight removes the promise', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      store.setInFlight('["todos"]', Promise.resolve(), new AbortController());
+      store.clearInFlight('["todos"]');
+      expect(store.getInFlight('["todos"]')).toBeUndefined();
+    });
+  });
+
+  describe('cancelQuery', () => {
+    it('aborts the AbortController registered for a key', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      const controller = new AbortController();
+      store.setInFlight('["todos"]', Promise.resolve(), controller);
+      expect(controller.signal.aborted).toBe(false);
+      store.cancelQuery('["todos"]');
+      expect(controller.signal.aborted).toBe(true);
+    });
+
+    it('is a no-op when no request is in flight', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      expect(() => store.cancelQuery('["todos"]')).not.toThrow();
     });
   });
 });

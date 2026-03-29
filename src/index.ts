@@ -29,7 +29,7 @@ export interface QueryResult<T> {
  */
 export function createCache(config: Partial<CacheConfig> = {}) {
   const resolvedConfig: CacheConfig = { ...CACHE_DEFAULTS, ...config };
-  const store = new CacheStore({ persist: resolvedConfig.persist });
+  const store = new CacheStore({ persist: resolvedConfig.persist, gcTime: resolvedConfig.gcTime });
 
   return {
     /**

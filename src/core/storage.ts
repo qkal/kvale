@@ -1,6 +1,6 @@
 import type { CacheEntry } from './types';
 
-const STORAGE_KEY = 'klync-cache';
+const STORAGE_KEY = 'kvalt-cache';
 
 /**
  * Persists the entire cache entry Map to storage under a single key.

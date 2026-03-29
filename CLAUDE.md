@@ -1,8 +1,8 @@
-# Quelt — CLAUDE.md
+# Kvant — CLAUDE.md
 
 ## Identity
 
-You are building **Quelt** — a runes-native, SvelteKit-first data fetching & caching library.
+You are building **Kvant** — a runes-native, SvelteKit-first data fetching & caching library.
 Tagline: "Smart data layer for SvelteKit — fetch, cache, done."
 
 ## Stack
@@ -15,7 +15,7 @@ Tagline: "Smart data layer for SvelteKit — fetch, cache, done."
 
 ## Architecture
 
-Quelt has a **pure TypeScript core** and a **thin Svelte adapter**:
+Kvant has a **pure TypeScript core** and a **thin Svelte adapter**:
 
 ```
 src/
@@ -85,8 +85,8 @@ Returns a reactive object:
 
 ## What NOT to Do
 
-- Do NOT add `QueryClientProvider` or any wrapper component — Quelt uses explicit `createCache()`
+- Do NOT add `QueryClientProvider` or any wrapper component — Kvant uses explicit `createCache()`
 - Do NOT use Svelte stores (`writable`, `readable`) — this is runes-only (Svelte 5+)
 - Do NOT use `$:` reactive declarations — runes only (`$state`, `$derived`, `$effect`)
-- Do NOT add dependencies unless absolutely necessary — Quelt should be zero-dep
-- Do NOT use `createQuery()` naming — Quelt uses `cache.query()` to differentiate from TanStack
+- Do NOT add dependencies unless absolutely necessary — Kvant should be zero-dep
+- Do NOT use `createQuery()` naming — Kvant uses `cache.query()` to differentiate from TanStack

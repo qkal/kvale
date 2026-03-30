@@ -389,12 +389,16 @@ describe('QueryRunner', () => {
     it('caps delay at 30_000ms', async () => {
       const delays: number[] = [];
       const origSetTimeout = globalThis.setTimeout;
-      vi.spyOn(globalThis, 'setTimeout').mockImplementation((cb: TimerHandler, delay?: number, ...args: unknown[]) => {
-        if (typeof delay === 'number' && delay > 500) delays.push(delay);
-        return origSetTimeout(cb as () => void, 0, ...args);
-      });
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation(
+        (cb: TimerHandler, delay?: number, ...args: unknown[]) => {
+          if (typeof delay === 'number' && delay > 500) delays.push(delay);
+          return origSetTimeout(cb as () => void, 0, ...args);
+        },
+      );
 
-      const fn = vi.fn(async (_signal: AbortSignal) => { throw new Error('fail'); });
+      const fn = vi.fn(async (_signal: AbortSignal) => {
+        throw new Error('fail');
+      });
       const runner = makeRunner({ fn }, { retry: 6 });
       runner.execute();
       await vi.runAllTimersAsync();
@@ -454,10 +458,7 @@ describe('QueryRunner', () => {
     });
 
     it('dedup consumer receives success after retry, not immediate rejection', async () => {
-      const fn = vi
-        .fn()
-        .mockRejectedValueOnce(new Error('transient'))
-        .mockResolvedValue('shared');
+      const fn = vi.fn().mockRejectedValueOnce(new Error('transient')).mockResolvedValue('shared');
       const store = new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER });
       const config = { key: 'dedup-retry', fn };
       const runner1 = new QueryRunner(store, config, { ...BASE_CONFIG, retry: 1 });

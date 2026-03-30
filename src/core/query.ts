@@ -204,7 +204,7 @@ export class QueryRunner<T, U = T> {
       return await this.config.fn(signal);
     } catch (err) {
       if (attempt < this.cacheConfig.retry && !signal.aborted) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 30_000);
+        const delay = Math.min(1000 * 2 ** attempt, 30_000);
         await new Promise<void>((resolve) => setTimeout(resolve, delay));
         if (signal.aborted) throw err;
         return this.executeWithRetry(attempt + 1, signal);

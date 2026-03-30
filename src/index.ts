@@ -4,9 +4,9 @@ import { CACHE_DEFAULTS } from './core/types';
 import type {
   CacheConfig,
   MutationConfig,
+  MutationStatus,
   QueryConfig,
   QueryStatus,
-  MutationStatus,
 } from './core/types';
 import { createReactiveQuery } from './svelte/adapter.svelte';
 import { createReactiveMutation } from './svelte/mutation-adapter.svelte';
@@ -117,9 +117,8 @@ export function createCache(config: Partial<CacheConfig> = {}) {
     async prefetch<T>(
       prefetchConfig: Pick<QueryConfig<T>, 'key' | 'fn' | 'staleTime'>,
     ): Promise<void> {
-      const key = typeof prefetchConfig.key === 'function'
-        ? prefetchConfig.key()
-        : prefetchConfig.key;
+      const key =
+        typeof prefetchConfig.key === 'function' ? prefetchConfig.key() : prefetchConfig.key;
       const normalized = normalizeKey(key);
       const serialized = serializeKey(normalized);
       const staleTime = prefetchConfig.staleTime ?? resolvedConfig.staleTime;

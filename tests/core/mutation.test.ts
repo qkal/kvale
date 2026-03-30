@@ -55,7 +55,9 @@ describe('MutationRunner', () => {
   describe('mutate — error lifecycle', () => {
     it('transitions idle → loading → error', async () => {
       const states: string[] = [];
-      const fn = vi.fn(async () => { throw new Error('boom'); });
+      const fn = vi.fn(async () => {
+        throw new Error('boom');
+      });
       const runner = new MutationRunner({ fn });
       runner.subscribe((s) => states.push(s.status));
       await runner.mutate('vars');
@@ -66,7 +68,9 @@ describe('MutationRunner', () => {
     it('calls onError with error, variables, and context', async () => {
       const onError = vi.fn();
       const onMutate = vi.fn(async () => 'ctx');
-      const fn = vi.fn(async () => { throw new Error('oops'); });
+      const fn = vi.fn(async () => {
+        throw new Error('oops');
+      });
       const runner = new MutationRunner({ fn, onMutate, onError });
       await runner.mutate('vars');
       expect(onError).toHaveBeenCalledWith(expect.any(Error), 'vars', 'ctx');
@@ -74,7 +78,9 @@ describe('MutationRunner', () => {
 
     it('calls onSettled with undefined data, error, variables, context on error', async () => {
       const onSettled = vi.fn();
-      const fn = vi.fn(async () => { throw new Error('fail'); });
+      const fn = vi.fn(async () => {
+        throw new Error('fail');
+      });
       const runner = new MutationRunner({ fn, onSettled });
       await runner.mutate('vars');
       expect(onSettled).toHaveBeenCalledWith(undefined, expect.any(Error), 'vars', undefined);
@@ -82,7 +88,9 @@ describe('MutationRunner', () => {
 
     it('transitions to error immediately if onMutate throws', async () => {
       const fn = vi.fn(async () => 'ok');
-      const onMutate = vi.fn(async () => { throw new Error('mutate-fail'); });
+      const onMutate = vi.fn(async () => {
+        throw new Error('mutate-fail');
+      });
       const runner = new MutationRunner({ fn, onMutate });
       await runner.mutate('vars');
       expect(runner.getState().status).toBe('error');

@@ -1,6 +1,6 @@
 {
   "name": "kvale",
-  "version": "0.2.0",
+  "version": "0.1.1",
   "description": "Smart data layer for SvelteKit — fetch, cache, done.",
   "license": "MIT",
   "type": "module",
@@ -13,7 +13,9 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "package": "svelte-package -i src",
     "check": "svelte-check --tsconfig ./tsconfig.json",

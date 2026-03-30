@@ -19,11 +19,11 @@ export function persistCache(storage: Storage, entries: Map<string, CacheEntry>)
 }
 
 /**
- * Hydrates a cache entry Map from storage.
- * Returns an empty Map if storage is empty, missing, or contains invalid JSON.
+ * Reconstructs a Map of cache entries from the provided Storage.
  *
- * @example
- * const entries = hydrateCache(localStorage);
+ * Parses the stored JSON value at the module's STORAGE_KEY and includes only entries whose value is a non-array object containing a numeric `timestamp` property and a `data` property. Any missing, malformed, or unparsable storage content results in an empty Map.
+ *
+ * @returns A Map mapping cache keys to `CacheEntry` objects; returns an empty Map if storage is missing, empty, contains invalid JSON, or contains no valid entries.
  */
 export function hydrateCache(storage: Storage): Map<string, CacheEntry> {
   try {

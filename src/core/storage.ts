@@ -1,10 +1,29 @@
 import type { CacheEntry } from './types';
 
 const STORAGE_KEY = 'kvale-cache';
+const warnedPersistenceFailures = new Set<string>();
+
+function warnStorageFailure(kind: 'persist' | 'hydrate', error: unknown): void {
+  const message =
+    error instanceof Error
+      ? `${error.name}:${error.message}`
+      : typeof error === 'string'
+        ? error
+        : String(error);
+  const warningKey = `${kind}:${message}`;
+  if (warnedPersistenceFailures.has(warningKey)) return;
+
+  warnedPersistenceFailures.add(warningKey);
+  if (kind === 'persist') {
+    console.warn('[kvale] Failed to persist cache:', error);
+  } else {
+    console.warn('[kvale] Failed to hydrate cache:', error);
+  }
+}
 
 /**
  * Persists the entire cache entry Map to storage under a single key.
- * Silently fails on quota errors, private mode, or other storage exceptions.
+ * Swallows quota/private-mode/storage exceptions and logs a warning once per runtime.
  *
  * @example
  * persistCache(localStorage, cacheEntries);
@@ -14,7 +33,7 @@ export function persistCache(storage: Storage, entries: Map<string, CacheEntry>)
     const serialized = JSON.stringify(Object.fromEntries(entries));
     storage.setItem(STORAGE_KEY, serialized);
   } catch (error) {
-    console.warn('[kvale] Failed to persist cache:', error);
+    warnStorageFailure('persist', error);
     // Best-effort — quota exceeded, private mode, etc.
   }
 }
@@ -23,6 +42,7 @@ export function persistCache(storage: Storage, entries: Map<string, CacheEntry>)
  * Reconstructs a Map of cache entries from the provided Storage.
  *
  * Parses the stored JSON value at the module's STORAGE_KEY and includes only entries whose value is a non-array object containing a numeric `timestamp` property, a `data` property, and—if present—an `error` property that is a string (otherwise the entry is rejected). Any missing, malformed, or unparsable storage content results in an empty Map.
+ * Storage access and parse failures are swallowed and logged once per runtime.
  *
  * @returns A Map mapping cache keys to `CacheEntry` objects; returns an empty Map if storage is missing, empty, contains invalid JSON, or contains no valid entries.
  */
@@ -71,7 +91,7 @@ export function hydrateCache(storage: Storage): Map<string, CacheEntry> {
 
     return new Map(entries);
   } catch (error) {
-    console.warn('[kvale] Failed to hydrate cache:', error);
+    warnStorageFailure('hydrate', error);
     return new Map();
   }
 }

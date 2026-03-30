@@ -1,4 +1,5 @@
 import type { CacheStore } from '../core/cache';
+import { normalizeKey, serializeKey } from '../core/key';
 import { QueryRunner } from '../core/query';
 import type { CacheConfig, QueryConfig, QueryState } from '../core/types';
 
@@ -62,7 +63,21 @@ export function createReactiveQuery<T, U = T>(
     runner.reset();
     runner.execute();
 
+    // refetchOnReconnect
+    let reconnectHandler: (() => void) | undefined;
+    if (cacheConfig.refetchOnReconnect && typeof window !== 'undefined') {
+      reconnectHandler = () => {
+        const staleTime = queryConfig.staleTime ?? cacheConfig.staleTime;
+        const key = serializeKey(normalizeKey(resolvedKey));
+        if (store.isStale(key, staleTime)) {
+          void runner.refetch();
+        }
+      };
+      window.addEventListener('online', reconnectHandler);
+    }
+
     return () => {
+      if (reconnectHandler) window.removeEventListener('online', reconnectHandler);
       if (runner.getState().data !== undefined) previousData = runner.getState().data as T;
       unsubscribe();
       runner.destroy();

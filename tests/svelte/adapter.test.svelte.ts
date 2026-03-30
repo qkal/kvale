@@ -140,6 +140,36 @@ describe('Svelte adapter', () => {
     });
   });
 
+  describe('refetchOnReconnect', () => {
+    it('refetches stale query when browser comes back online', async () => {
+      const fn = vi.fn(async (_signal: AbortSignal) => 'data');
+      render(QueryTest, { props: { fn, staleTime: 0 } });
+
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      // Advance time so the entry is stale (staleTime: 0, needs timestamp < Date.now())
+      vi.advanceTimersByTime(1);
+      window.dispatchEvent(new Event('online'));
+      await vi.runAllTimersAsync();
+
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not refetch when refetchOnReconnect is false', async () => {
+      const fn = vi.fn(async (_signal: AbortSignal) => 'data');
+      render(QueryTest, { props: { fn, staleTime: 0, refetchOnReconnect: false } });
+
+      await vi.runAllTimersAsync();
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      window.dispatchEvent(new Event('online'));
+      await vi.runAllTimersAsync();
+
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('select', () => {
     it('delivers transformed data to the component', async () => {
       const fn = vi.fn(async (_signal: AbortSignal) => [1, 2, 3]);

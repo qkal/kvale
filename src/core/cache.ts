@@ -15,6 +15,7 @@ type CacheSubscriber = () => void;
  */
 export class CacheStore {
   private readonly cache: Map<string, CacheEntry>;
+  private readonly keyArrays: Map<string, unknown[]> = new Map();
   private readonly subscribers: Map<string, Set<CacheSubscriber>> = new Map();
   private readonly config: Pick<CacheConfig, 'persist' | 'gcTime'>;
 
@@ -29,6 +30,9 @@ export class CacheStore {
   constructor(config: Pick<CacheConfig, 'persist' | 'gcTime'>) {
     this.config = config;
     this.cache = config.persist ? hydrateCache(config.persist) : new Map();
+    for (const key of this.cache.keys()) {
+      this.keyArrays.set(key, JSON.parse(key) as unknown[]);
+    }
   }
 
   /** Returns the cached entry for `key`, or `undefined` if not present. */
@@ -39,6 +43,9 @@ export class CacheStore {
   /** Stores `entry` under `key`, persists to storage (if configured), and notifies subscribers. */
   set(key: string, entry: CacheEntry): void {
     this.cache.set(key, entry);
+    if (!this.keyArrays.has(key)) {
+      this.keyArrays.set(key, JSON.parse(key) as unknown[]);
+    }
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -58,6 +65,7 @@ export class CacheStore {
   /** Removes the entry for `key` and notifies subscribers. No-op if key does not exist. */
   delete(key: string): void {
     this.cache.delete(key);
+    this.keyArrays.delete(key);
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -68,6 +76,7 @@ export class CacheStore {
   clear(): void {
     const keys = [...this.cache.keys()];
     this.cache.clear();
+    this.keyArrays.clear();
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -126,11 +135,13 @@ export class CacheStore {
   invalidate(serializedPrefix: string): void {
     const prefixArray = JSON.parse(serializedPrefix) as unknown[];
     const invalidatedKeys: string[] = [];
-    for (const [key, entry] of this.cache) {
-      const keyArray = JSON.parse(key) as unknown[];
+    for (const [key, keyArray] of this.keyArrays) {
       if (matchesKey(prefixArray, keyArray)) {
-        this.cache.set(key, { ...entry, timestamp: 0 });
-        invalidatedKeys.push(key);
+        const entry = this.cache.get(key);
+        if (entry) {
+          this.cache.set(key, { ...entry, timestamp: 0 });
+          invalidatedKeys.push(key);
+        }
       }
     }
     for (const key of invalidatedKeys) this.notify(key);
@@ -206,6 +217,7 @@ export class CacheStore {
     if (this.gcTimers.has(key)) return; // already scheduled — don't reset
     const timer = setTimeout(() => {
       this.cache.delete(key);
+      this.keyArrays.delete(key);
       this.gcTimers.delete(key);
       this.keyRefs.delete(key);
       if (this.config.persist) persistCache(this.config.persist, this.cache);

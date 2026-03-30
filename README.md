@@ -317,4 +317,4 @@ We welcome contributions of all kinds. See [CONTRIBUTING.md](./CONTRIBUTING.md) 
 
 ## License
 
-MIT © Kal, founder of [Complexia](https://complexia.org)
+BSD-2-Clause-Patent © Kal, founder of [Complexia](https://complexia.org)

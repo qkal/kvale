@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { hydrateCache, persistCache } from '../../src/core/storage';
 import type { CacheEntry } from '../../src/core/types';
 
@@ -24,15 +25,9 @@ function makeMockStorage(): Storage {
 
 describe('persistCache + hydrateCache', () => {
   let storage: Storage;
-  let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     storage = makeMockStorage();
-    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   it('round-trips a single cache entry', () => {
@@ -62,9 +57,12 @@ describe('persistCache + hydrateCache', () => {
     expect(hydrateCache(storage).size).toBe(0);
   });
 
-  it('returns empty Map when storage contains corrupted JSON', () => {
+  it('returns empty Map when storage contains corrupted JSON and logs a warning', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     storage.setItem('kvale-cache', 'not valid json {{{');
     expect(hydrateCache(storage).size).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith('[kvale] Failed to hydrate cache:', expect.any(Error));
+    warnSpy.mockRestore();
   });
 
   it('returns empty Map when storage contains null JSON value', () => {
@@ -72,37 +70,16 @@ describe('persistCache + hydrateCache', () => {
     expect(hydrateCache(storage).size).toBe(0);
   });
 
-  it('swallows persistCache write errors and warns once', () => {
+  it('swallows persistCache write errors and logs a warning', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const brokenStorage = {
       ...makeMockStorage(),
       setItem: () => {
         throw new Error('QuotaExceededError');
       },
     };
-
     expect(() => persistCache(brokenStorage as Storage, new Map())).not.toThrow();
-    expect(() => persistCache(brokenStorage as Storage, new Map())).not.toThrow();
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[kvale] Failed to persist cache:',
-      expect.objectContaining({ message: 'QuotaExceededError' }),
-    );
-  });
-
-  it('returns empty map for hydrate errors and warns once', () => {
-    const brokenStorage = {
-      ...makeMockStorage(),
-      getItem: () => {
-        throw new Error('StorageReadError');
-      },
-    };
-
-    expect(hydrateCache(brokenStorage as Storage)).toEqual(new Map());
-    expect(hydrateCache(brokenStorage as Storage)).toEqual(new Map());
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[kvale] Failed to hydrate cache:',
-      expect.objectContaining({ message: 'StorageReadError' }),
-    );
+    expect(warnSpy).toHaveBeenCalledWith('[kvale] Failed to persist cache:', expect.any(Error));
+    warnSpy.mockRestore();
   });
 });

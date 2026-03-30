@@ -53,7 +53,7 @@ export class CacheStore {
 
   /** Stores `entry` under `key`, persists to storage (if configured), and notifies subscribers. */
   set(key: string, entry: CacheEntry): void {
-    this.cache.set(key, entry);
+    // Validate key before mutating cache
     if (!this.keyArrays.has(key)) {
       try {
         const parsedKey = JSON.parse(key);
@@ -70,6 +70,7 @@ export class CacheStore {
         throw new Error(`Failed to parse cache key as JSON: ${key}`);
       }
     }
+    this.cache.set(key, entry);
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -157,7 +158,21 @@ export class CacheStore {
    * `["todos"]`, `["todos",1]`, `["todos","active"]`, etc.
    */
   invalidate(serializedPrefix: string): void {
-    const prefixArray = JSON.parse(serializedPrefix) as unknown[];
+    let prefixArray: unknown[];
+    try {
+      const parsed = JSON.parse(serializedPrefix);
+      if (!Array.isArray(parsed)) {
+        throw new Error(`Invalidate prefix must be an array, got: ${typeof parsed}`);
+      }
+      prefixArray = parsed;
+    } catch (error) {
+      // Re-throw with context if it's our validation error, otherwise wrap parse error
+      if (error instanceof Error && error.message.startsWith('Invalidate prefix must be')) {
+        throw error;
+      }
+      throw new Error(`Failed to parse invalidate prefix as JSON: ${serializedPrefix}`);
+    }
+
     const invalidatedKeys: string[] = [];
     for (const [key, keyArray] of this.keyArrays) {
       if (matchesKey(prefixArray, keyArray)) {

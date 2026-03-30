@@ -84,7 +84,13 @@ export class CacheStore {
     }
     this.subscribers.get(key)?.add(callback);
     return () => {
-      this.subscribers.get(key)?.delete(callback);
+      const subs = this.subscribers.get(key);
+      if (subs) {
+        subs.delete(callback);
+        if (subs.size === 0) {
+          this.subscribers.delete(key);
+        }
+      }
     };
   }
 

@@ -4,7 +4,7 @@
 
 [![TypeScript](https://img.shields.io/badge/powered%20by-TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![npm](https://img.shields.io/npm/v/kvale)](https://npmjs.com/package/kvale)
-[![license](https://img.shields.io/npm/l/kvale)](./LICENSE)
+[![license](https://img.shields.io/badge/license-BSD--2--Clause--Patent-blue)](./LICENSE)
 [![svelte](https://img.shields.io/badge/svelte-5%2B-ff3e00)](https://svelte.dev)
 [![zero deps](https://img.shields.io/badge/dependencies-zero-brightgreen)](./package.json)
 

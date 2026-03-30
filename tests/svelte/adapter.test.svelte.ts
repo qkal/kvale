@@ -85,27 +85,23 @@ describe('Svelte adapter', () => {
       const { component } = render(ReactiveKeyTest, { props: { fn } });
 
       await vi.runAllTimersAsync();
-      await waitFor(() =>
-        expect(screen.getByTestId('data').textContent).toBe('"user-data"'),
-      );
+      await waitFor(() => expect(screen.getByTestId('data').textContent).toBe('"user-data"'));
       expect(fn).toHaveBeenCalledTimes(1);
 
       component.setUserId(2);
       await vi.runAllTimersAsync();
-      await waitFor(() =>
-        expect(fn).toHaveBeenCalledTimes(2),
-      );
+      await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
     });
   });
 
   describe('keepPreviousData', () => {
     it('shows previous data with refreshing status during key change instead of loading', async () => {
-      let resolveFetch: (value: string) => void;
+      let resolveFetch: ((value: string) => void) | undefined;
       let callCount = 0;
 
       const fn = vi.fn(async (_signal: AbortSignal) => {
         callCount++;
-        if (callCount === 1) return `user-1`;
+        if (callCount === 1) return 'user-1';
         // Second call — return a promise we control
         return new Promise<string>((resolve) => {
           resolveFetch = resolve;
@@ -132,7 +128,7 @@ describe('Svelte adapter', () => {
       expect(screen.getByTestId('data').textContent).toBe('"user-1"');
 
       // Resolve the pending fetch
-      resolveFetch!('user-2');
+      resolveFetch?.('user-2');
       await vi.runAllTimersAsync();
       await waitFor(() => {
         expect(screen.getByTestId('data').textContent).toBe('"user-2"');
@@ -176,9 +172,7 @@ describe('Svelte adapter', () => {
       render(SelectTest, { props: { fn, cacheKey: 'nums' } });
 
       await vi.runAllTimersAsync();
-      await waitFor(() =>
-        expect(screen.getByTestId('data').textContent).toBe('[2,4,6]'),
-      );
+      await waitFor(() => expect(screen.getByTestId('data').textContent).toBe('[2,4,6]'));
     });
 
     it('stores raw data in cache, not selected data', async () => {
@@ -187,9 +181,7 @@ describe('Svelte adapter', () => {
 
       await vi.runAllTimersAsync();
       // The selected data ([2,4,6]) is shown in the DOM
-      await waitFor(() =>
-        expect(screen.getByTestId('data').textContent).toBe('[2,4,6]'),
-      );
+      await waitFor(() => expect(screen.getByTestId('data').textContent).toBe('[2,4,6]'));
       // But the raw data ([1,2,3]) is in the cache
       expect(component.cache.getQueryData<number[]>('nums2')).toEqual([1, 2, 3]);
     });

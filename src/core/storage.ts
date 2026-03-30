@@ -31,7 +31,22 @@ export function hydrateCache(storage: Storage): Map<string, CacheEntry> {
     if (!raw) return new Map();
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return new Map();
-    return new Map(Object.entries(parsed) as [string, CacheEntry][]);
+
+    const entries: [string, CacheEntry][] = [];
+    for (const [key, value] of Object.entries(parsed)) {
+      if (
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        'timestamp' in value &&
+        typeof (value as any).timestamp === 'number' &&
+        'data' in value
+      ) {
+        entries.push([key, value as CacheEntry]);
+      }
+    }
+
+    return new Map(entries);
   } catch {
     return new Map();
   }

@@ -1,6 +1,6 @@
 {
   "name": "kvale",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Smart data layer for SvelteKit — fetch, cache, done.",
   "license": "BSD-2-Clause-Patent",
   "type": "module",

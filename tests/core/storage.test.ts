@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hydrateCache, persistCache } from '../../src/core/storage';
 import type { CacheEntry } from '../../src/core/types';
 
@@ -24,9 +24,15 @@ function makeMockStorage(): Storage {
 
 describe('persistCache + hydrateCache', () => {
   let storage: Storage;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     storage = makeMockStorage();
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('round-trips a single cache entry', () => {
@@ -66,13 +72,37 @@ describe('persistCache + hydrateCache', () => {
     expect(hydrateCache(storage).size).toBe(0);
   });
 
-  it('silently swallows persistCache write errors', () => {
+  it('swallows persistCache write errors and warns once', () => {
     const brokenStorage = {
       ...makeMockStorage(),
       setItem: () => {
         throw new Error('QuotaExceededError');
       },
     };
+
     expect(() => persistCache(brokenStorage as Storage, new Map())).not.toThrow();
+    expect(() => persistCache(brokenStorage as Storage, new Map())).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[kvale] Failed to persist cache:',
+      expect.objectContaining({ message: 'QuotaExceededError' }),
+    );
+  });
+
+  it('returns empty map for hydrate errors and warns once', () => {
+    const brokenStorage = {
+      ...makeMockStorage(),
+      getItem: () => {
+        throw new Error('StorageReadError');
+      },
+    };
+
+    expect(hydrateCache(brokenStorage as Storage)).toEqual(new Map());
+    expect(hydrateCache(brokenStorage as Storage)).toEqual(new Map());
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[kvale] Failed to hydrate cache:',
+      expect.objectContaining({ message: 'StorageReadError' }),
+    );
   });
 });

@@ -53,6 +53,22 @@ describe('Svelte adapter', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
+  it('stays idle when enabled function throws', async () => {
+    const fn = vi.fn();
+    render(QueryTest, {
+      props: {
+        fn,
+        enabled: () => {
+          throw new Error('boom');
+        },
+      },
+    });
+
+    await vi.runAllTimersAsync();
+    expect(screen.getByTestId('status').textContent).toBe('idle');
+    expect(fn).not.toHaveBeenCalled();
+  });
+
   it('does not fetch when refetch() is called on a disabled query', async () => {
     const fn = vi.fn().mockResolvedValue('data');
     render(QueryTest, { props: { fn, enabled: false } });

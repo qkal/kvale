@@ -15,6 +15,7 @@ type CacheSubscriber = () => void;
  */
 export class CacheStore {
   private readonly cache: Map<string, CacheEntry>;
+  private readonly keyArrays: Map<string, unknown[]> = new Map();
   private readonly subscribers: Map<string, Set<CacheSubscriber>> = new Map();
   private readonly config: Pick<CacheConfig, 'persist' | 'gcTime'>;
 
@@ -29,6 +30,8 @@ export class CacheStore {
   constructor(config: Pick<CacheConfig, 'persist' | 'gcTime'>) {
     this.config = config;
     this.cache = config.persist ? hydrateCache(config.persist) : new Map();
+    // keyArrays is populated lazily: via set() for new keys, and on first
+    // invalidate() call for keys that were hydrated from persisted storage.
   }
 
   /** Returns the cached entry for `key`, or `undefined` if not present. */
@@ -38,6 +41,13 @@ export class CacheStore {
 
   /** Stores `entry` under `key`, persists to storage (if configured), and notifies subscribers. */
   set(key: string, entry: CacheEntry): void {
+    if (!this.keyArrays.has(key)) {
+      const parsed = JSON.parse(key) as unknown;
+      if (!Array.isArray(parsed)) {
+        throw new Error(`Cache key must serialize to an array, got: ${key}`);
+      }
+      this.keyArrays.set(key, parsed);
+    }
     this.cache.set(key, entry);
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
@@ -58,6 +68,7 @@ export class CacheStore {
   /** Removes the entry for `key` and notifies subscribers. No-op if key does not exist. */
   delete(key: string): void {
     this.cache.delete(key);
+    this.keyArrays.delete(key);
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -68,6 +79,7 @@ export class CacheStore {
   clear(): void {
     const keys = [...this.cache.keys()];
     this.cache.clear();
+    this.keyArrays.clear();
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -84,7 +96,13 @@ export class CacheStore {
     }
     this.subscribers.get(key)?.add(callback);
     return () => {
-      this.subscribers.get(key)?.delete(callback);
+      const subs = this.subscribers.get(key);
+      if (subs) {
+        subs.delete(callback);
+        if (subs.size === 0) {
+          this.subscribers.delete(key);
+        }
+      }
     };
   }
 
@@ -126,11 +144,29 @@ export class CacheStore {
   invalidate(serializedPrefix: string): void {
     const prefixArray = JSON.parse(serializedPrefix) as unknown[];
     const invalidatedKeys: string[] = [];
-    for (const [key, entry] of this.cache) {
-      const keyArray = JSON.parse(key) as unknown[];
+    for (const key of this.cache.keys()) {
+      // Lazily populate keyArrays for keys hydrated from persisted storage.
+      let keyArray = this.keyArrays.get(key);
+      if (!keyArray) {
+        try {
+          const parsed = JSON.parse(key) as unknown;
+          if (!Array.isArray(parsed)) {
+            console.warn(`[kvale] Skipping corrupt cache key (not an array): ${key}`);
+            continue;
+          }
+          keyArray = parsed;
+          this.keyArrays.set(key, keyArray);
+        } catch {
+          console.warn(`[kvale] Skipping cache key with invalid JSON: ${key}`);
+          continue;
+        }
+      }
       if (matchesKey(prefixArray, keyArray)) {
-        this.cache.set(key, { ...entry, timestamp: 0 });
-        invalidatedKeys.push(key);
+        const entry = this.cache.get(key);
+        if (entry) {
+          this.cache.set(key, { ...entry, timestamp: 0 });
+          invalidatedKeys.push(key);
+        }
       }
     }
     for (const key of invalidatedKeys) this.notify(key);
@@ -206,6 +242,7 @@ export class CacheStore {
     if (this.gcTimers.has(key)) return; // already scheduled — don't reset
     const timer = setTimeout(() => {
       this.cache.delete(key);
+      this.keyArrays.delete(key);
       this.gcTimers.delete(key);
       this.keyRefs.delete(key);
       if (this.config.persist) persistCache(this.config.persist, this.cache);

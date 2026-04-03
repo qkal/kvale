@@ -49,7 +49,6 @@ export class CacheStore {
       this.keyArrays.set(key, parsed);
     }
     this.cache.set(key, entry);
-    this.keyArrays.delete(key); // clear cached parse on overwrite, or let lazy load handle it. Actually lazy load is fine. We can just delete to be safe.
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -263,7 +262,6 @@ export class CacheStore {
       this.keyArrays.delete(key);
       this.gcTimers.delete(key);
       this.keyRefs.delete(key);
-      this.keyArrays.delete(key);
       if (this.config.persist) persistCache(this.config.persist, this.cache);
       this.emitEvent({ type: 'gc', key: JSON.parse(key) as unknown[] });
     }, this.config.gcTime);

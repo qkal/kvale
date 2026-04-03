@@ -388,7 +388,10 @@ describe('CacheStore', () => {
         expect.objectContaining({
           type: 'invalidate',
           key: ['todos'],
-          matchedKeys: expect.arrayContaining([['todos', 1], ['todos', 2]]),
+          matchedKeys: expect.arrayContaining([
+            ['todos', 1],
+            ['todos', 2],
+          ]),
         }),
       );
     });
@@ -421,8 +424,9 @@ describe('security and robustness', () => {
   it('invalidate gracefully skips cache entries with invalid JSON keys', () => {
     const store = new CacheStore({ gcTime: 300_000 });
     // manually inject an invalid JSON key into the raw cache map to simulate corrupted localstorage
+    const corruptEntry = makeEntry([]);
     // @ts-expect-error - bypassing private modifier
-    store.cache.set('INVALID_JSON', makeEntry([]));
+    store.cache.set('INVALID_JSON', corruptEntry);
     store.set('["todos"]', makeEntry([]));
 
     // Should not throw, and should still invalidate valid matches
@@ -433,6 +437,6 @@ describe('security and robustness', () => {
     // @ts-expect-error - bypassing private modifier to verify internal state
     expect(store.cache.has('INVALID_JSON')).toBe(true);
     // @ts-expect-error - bypassing private modifier to verify internal state
-    expect(store.cache.get('INVALID_JSON')).toEqual(makeEntry([]));
+    expect(store.cache.get('INVALID_JSON')).toBe(corruptEntry);
   });
 });

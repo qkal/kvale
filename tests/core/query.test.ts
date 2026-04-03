@@ -88,7 +88,11 @@ describe('QueryRunner', () => {
         configurable: true,
         enumerable: true,
       });
-      const runner = new QueryRunner(new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER }), config, BASE_CONFIG);
+      const runner = new QueryRunner(
+        new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER }),
+        config,
+        BASE_CONFIG,
+      );
       expect(runner.isEnabled()).toBe(false);
     });
   });
@@ -718,7 +722,9 @@ describe('QueryRunner', () => {
         .map((args: unknown[]) => args[0] as CacheEvent)
         .find((e) => e.type === 'fetch:success');
       expect(successEvent).toBeDefined();
-      expect((successEvent as { type: 'fetch:success'; key: unknown[]; duration: number }).duration).toBeGreaterThanOrEqual(0);
+      expect(
+        (successEvent as { type: 'fetch:success'; key: unknown[]; duration: number }).duration,
+      ).toBeGreaterThanOrEqual(0);
     });
 
     it('fires fetch:error on each failed attempt with correct failureCount', async () => {
@@ -730,11 +736,11 @@ describe('QueryRunner', () => {
       const errorEvents = onEvent.mock.calls
         .map((args: unknown[]) => args[0] as CacheEvent)
         .filter((e) => e.type === 'fetch:error') as Array<{
-          type: 'fetch:error';
-          key: unknown[];
-          error: Error;
-          failureCount: number;
-        }>;
+        type: 'fetch:error';
+        key: unknown[];
+        error: Error;
+        failureCount: number;
+      }>;
       expect(errorEvents).toHaveLength(3);
       expect(errorEvents[0].failureCount).toBe(0);
       expect(errorEvents[1].failureCount).toBe(1);

@@ -7,11 +7,8 @@ export default defineConfig({
     conditions: ['browser'],
   },
   test: {
+    environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
-    environmentMatchGlobs: [
-      ['tests/svelte/**', 'jsdom'],
-      ['tests/core/query.test.ts', 'jsdom'],
-    ],
     include: ['tests/**/*.test.ts', 'tests/**/*.test.svelte.ts'],
   },
 });

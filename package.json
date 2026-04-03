@@ -1,21 +1,49 @@
 {
   "name": "kvale",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Smart data layer for SvelteKit — fetch, cache, done.",
   "license": "BSD-2-Clause-Patent",
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "svelte": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "svelte": "./dist/index.js",
       "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "sideEffects": false,
+  "files": ["dist", "README.md", "LICENSE", "CHANGELOG.md"],
+  "keywords": [
+    "svelte",
+    "sveltekit",
+    "svelte5",
+    "runes",
+    "cache",
+    "data-fetching",
+    "stale-while-revalidate",
+    "query",
+    "mutation",
+    "ssr"
+  ],
+  "homepage": "https://github.com/qkal/kvale#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qkal/kvale.git"
+  },
+  "bugs": {
+    "url": "https://github.com/qkal/kvale/issues"
+  },
+  "author": "Kal <czapkovicz@gmail.com> (https://github.com/qkal)",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "prepublishOnly": "bun test && bun run package",
+    "prepublishOnly": "npm test && npm run package",
     "package": "svelte-package -i src",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",

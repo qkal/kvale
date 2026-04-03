@@ -25,9 +25,12 @@ function makeMockStorage(): Storage {
 describe('hydrateCache security', () => {
   it('should handle entries with missing properties', () => {
     const storage = makeMockStorage();
-    storage.setItem('kvale-cache', JSON.stringify({
-        'key1': { data: 'value1' } // missing timestamp
-    }));
+    storage.setItem(
+      'kvale-cache',
+      JSON.stringify({
+        key1: { data: 'value1' }, // missing timestamp
+      }),
+    );
 
     const result = hydrateCache(storage);
     expect(result.has('key1')).toBe(false);
@@ -35,9 +38,12 @@ describe('hydrateCache security', () => {
 
   it('should handle non-object entries', () => {
     const storage = makeMockStorage();
-    storage.setItem('kvale-cache', JSON.stringify({
-        'key1': 'not an object'
-    }));
+    storage.setItem(
+      'kvale-cache',
+      JSON.stringify({
+        key1: 'not an object',
+      }),
+    );
 
     const result = hydrateCache(storage);
     expect(result.has('key1')).toBe(false);
@@ -45,9 +51,12 @@ describe('hydrateCache security', () => {
 
   it('should accept valid entries', () => {
     const storage = makeMockStorage();
-    storage.setItem('kvale-cache', JSON.stringify({
-        'key1': { data: 'value1', timestamp: 12345 }
-    }));
+    storage.setItem(
+      'kvale-cache',
+      JSON.stringify({
+        key1: { data: 'value1', timestamp: 12345 },
+      }),
+    );
 
     const result = hydrateCache(storage);
     expect(result.has('key1')).toBe(true);
@@ -56,14 +65,17 @@ describe('hydrateCache security', () => {
 
   it('should filter out invalid entries from a mixed bag', () => {
     const storage = makeMockStorage();
-    storage.setItem('kvale-cache', JSON.stringify({
-        'valid': { data: 'ok', timestamp: 123 },
-        'invalid1': { data: 'no timestamp' },
-        'invalid2': { timestamp: 123 }, // no data
-        'invalid3': 'not an object',
-        'invalid4': null,
-        'invalid5': []
-    }));
+    storage.setItem(
+      'kvale-cache',
+      JSON.stringify({
+        valid: { data: 'ok', timestamp: 123 },
+        invalid1: { data: 'no timestamp' },
+        invalid2: { timestamp: 123 }, // no data
+        invalid3: 'not an object',
+        invalid4: null,
+        invalid5: [],
+      }),
+    );
 
     const result = hydrateCache(storage);
     expect(result.size).toBe(1);

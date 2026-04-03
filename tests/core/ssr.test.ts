@@ -71,7 +71,11 @@ describe('rehydrate', () => {
   it('fires onEvent with type rehydrate and correct keys', () => {
     const store = new CacheStore({ gcTime: 300_000 });
     const onEvent = vi.fn();
-    rehydrate(store, { entries: [{ key: '["todos"]', data: [1], timestamp: Date.now() }] }, onEvent);
+    rehydrate(
+      store,
+      { entries: [{ key: '["todos"]', data: [1], timestamp: Date.now() }] },
+      onEvent,
+    );
     expect(onEvent).toHaveBeenCalledWith({ type: 'rehydrate', keys: [['todos']] });
   });
 

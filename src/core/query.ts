@@ -40,8 +40,7 @@ export class QueryRunner<T, U = T> {
 
     // Normalize retry to a predicate function — checked once, never branched again
     const retry = config.retry ?? cacheConfig.retry;
-    this.retryFn =
-      typeof retry === 'number' ? (count) => count < (retry as number) : retry;
+    this.retryFn = typeof retry === 'number' ? (count) => count < (retry as number) : retry;
 
     this.queryTimeout = config.timeout ?? cacheConfig.timeout;
 
@@ -203,7 +202,11 @@ export class QueryRunner<T, U = T> {
       const data = await retryChain;
       this.store.clearInFlight(this.serializedKey);
       if (this.destroyed || signal.aborted) return;
-      this.emitEvent({ type: 'fetch:success', key: this.keyArray, duration: Date.now() - fetchStartTime });
+      this.emitEvent({
+        type: 'fetch:success',
+        key: this.keyArray,
+        duration: Date.now() - fetchStartTime,
+      });
       this.store.set(this.serializedKey, { data, timestamp: Date.now(), error: null });
       this.setState({ status: 'success', data, error: null, isStale: false });
     } catch (err) {
@@ -244,6 +247,7 @@ export class QueryRunner<T, U = T> {
   private fetchOnce(signal: AbortSignal): Promise<T> {
     if (!this.queryTimeout) return this.config.fn(signal);
 
+    const timeout = this.queryTimeout;
     const attemptController = new AbortController();
     const onMainAbort = () => attemptController.abort();
     signal.addEventListener('abort', onMainAbort, { once: true });
@@ -254,7 +258,7 @@ export class QueryRunner<T, U = T> {
         signal.removeEventListener('abort', onMainAbort);
         attemptController.abort();
         reject(new Error('Request timed out'));
-      }, this.queryTimeout!);
+      }, timeout);
     });
 
     return Promise.race([this.config.fn(attemptController.signal), timeoutPromise]).finally(() => {

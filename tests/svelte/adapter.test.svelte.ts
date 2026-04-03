@@ -279,7 +279,11 @@ describe('Svelte adapter', () => {
       const clientCache = createCache({ refetchOnWindowFocus: false });
       clientCache.rehydrate(dehydrated);
 
-      const { getByTestId } = render(CacheQueryTest, { cache: clientCache, fn, queryKey: 'ssr-todos' });
+      const { getByTestId } = render(CacheQueryTest, {
+        cache: clientCache,
+        fn,
+        queryKey: 'ssr-todos',
+      });
       // After rehydrate the cache has data — query should start at success, not loading
       await tick();
       expect(getByTestId('status').textContent).toBe('success');

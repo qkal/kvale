@@ -147,8 +147,12 @@ describe('MutationRunner', () => {
       const fn = vi.fn(async () => {
         throw new Error('mutation fail');
       });
-      const onSettled = vi.fn(() => { order.push('onSettled'); });
-      const cacheOnError = vi.fn(() => { order.push('cacheOnError'); });
+      const onSettled = vi.fn(() => {
+        order.push('onSettled');
+      });
+      const cacheOnError = vi.fn(() => {
+        order.push('cacheOnError');
+      });
       const runner = new MutationRunner({ fn, onSettled }, cacheOnError);
       await runner.mutate('vars');
       expect(cacheOnError).toHaveBeenCalledWith(expect.any(Error), []);
@@ -164,8 +168,12 @@ describe('MutationRunner', () => {
     });
 
     it('silently swallows if cacheOnError throws', async () => {
-      const fn = vi.fn(async () => { throw new Error('fail'); });
-      const cacheOnError = vi.fn(() => { throw new Error('hook fail'); });
+      const fn = vi.fn(async () => {
+        throw new Error('fail');
+      });
+      const cacheOnError = vi.fn(() => {
+        throw new Error('hook fail');
+      });
       const runner = new MutationRunner({ fn }, cacheOnError);
       await expect(runner.mutate('vars')).resolves.not.toThrow();
     });
